@@ -215,13 +215,6 @@ def gerar_proposta_word(caminho_saida, dados):
     gerar_proposta_word_liftdesk(caminho_saida, dados)
 
 
-# ============================================================
-# GERAÇÃO DO CONTRATO EM WORD (a partir de um orçamento salvo)
-# ------------------------------------------------------------
-# Diferente da proposta, o contrato não depende de um template
-# pré-existente: é montado do zero com python-docx a partir dos
-# dados do orçamento selecionado pelo usuário na tela Contratos.
-# ============================================================
 
 def gerar_contrato_word(caminho_saida, placeholders):
     """Gera o contrato em Word do zero com os dados informados."""
@@ -361,9 +354,6 @@ def main(page: ft.Page):
         cursor.execute("DELETE FROM produtos WHERE nome = ?", (nome,))
         conexao.commit()
 
-    # --------------------------------------------------------
-    # ORÇAMENTOS — leitura para uso na tela de Contratos
-    # --------------------------------------------------------
     def carregar_lista_orcamentos():
         """Retorna todos os orçamentos salvos, do mais recente para o mais antigo,
         para popular o seletor da tela de Contratos."""
@@ -443,9 +433,6 @@ def main(page: ft.Page):
             )
         )
 
-    # --------------------------------------------------------
-    # CAMPOS DO FORMULÁRIO
-    # --------------------------------------------------------
     cliente_field = ft.TextField(
         label="Cliente",
         hint_text="Nome completo do cliente",
@@ -625,9 +612,6 @@ def main(page: ft.Page):
     def esconder_erro():
         erro_text.visible = False
 
-    # --------------------------------------------------------
-    # LÓGICA — calcula somando todos os itens da lista dinâmica
-    # --------------------------------------------------------
     def calcular(e=None):
         cliente = cliente_field.value or ""
         #obra = obra_field.value or ""
@@ -758,9 +742,6 @@ def main(page: ft.Page):
         page.update()
         return dados
 
-    # --------------------------------------------------------
-    # SALVAR TXT / PDF / WORD
-    # --------------------------------------------------------
     def _escrever_txt(caminho, dados):
         linhas_produtos = "\n".join(
             f"  {item['quantidade']}x {item['produto']} — "
@@ -871,9 +852,6 @@ def main(page: ft.Page):
             return
         mostrar_snack(f"Arquivo salvo em: {caminho}")
 
-    # --------------------------------------------------------
-    # BOTÕES PADRONIZADOS
-    # --------------------------------------------------------
     def botao_acao(texto, on_click, principal=False):
         return ft.ElevatedButton(
             content=texto,
@@ -899,9 +877,6 @@ def main(page: ft.Page):
         spacing=10,
     )
 
-    # --------------------------------------------------------
-    # CARD: FORMULÁRIO
-    # --------------------------------------------------------
     botao_add_produto = ft.TextButton(
         content=ft.Row(
             controls=[
@@ -939,9 +914,6 @@ def main(page: ft.Page):
         padding=26,
     )
 
-    # --------------------------------------------------------
-    # CARD: RESULTADO
-    # --------------------------------------------------------
     card_resultado = ft.Container(
         content=ft.Column(
             controls=[
@@ -1014,9 +986,6 @@ def main(page: ft.Page):
             ],
         )
 
-    # --------------------------------------------------------
-    # SIDEBAR
-    # --------------------------------------------------------
     def construir_sidebar():
         def item_nav(texto, rota, ativo=False):
             return ft.Container(
@@ -1103,9 +1072,6 @@ def main(page: ft.Page):
         cursor.execute("DELETE FROM orcamentos")
         conexao.commit()
 
-    # --------------------------------------------------------
-    # VIEW — HISTÓRICO
-    # --------------------------------------------------------
     def construir_view_historico():
         cursor.execute(
             """
@@ -1328,9 +1294,6 @@ def main(page: ft.Page):
             ],
         )
 
-    # --------------------------------------------------------
-    # VIEW — LISTA DE PRODUTOS
-    # --------------------------------------------------------
     def construir_view_produtos():
         produtos_atuais = carregar_produtos()
 
@@ -1487,9 +1450,6 @@ def main(page: ft.Page):
             ],
         )
     
-    # --------------------------------------------------------
-    # VIEW — NOVO PRODUTO (formulário)
-    # --------------------------------------------------------
     def construir_view_novo_produto():
         nome_produto_field = ft.TextField(
             label="Nome do produto",
@@ -1656,10 +1616,6 @@ def main(page: ft.Page):
             ],
         )
 
-    # --------------------------------------------------------
-    # VIEW — CONTRATOS (gera contrato em Word a partir de um
-    # orçamento já salvo, selecionado pelo usuário)
-    # --------------------------------------------------------
     def construir_view_contratos():
         orcamentos_salvos = carregar_lista_orcamentos()
 
@@ -2073,9 +2029,6 @@ def main(page: ft.Page):
             ],
         )
 
-    # --------------------------------------------------------
-    # ROTEAMENTO
-    # --------------------------------------------------------
     def ao_mudar_rota(e=None):
         page.views.clear()
         if page.route == "/historico":
