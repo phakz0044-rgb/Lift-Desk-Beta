@@ -5,10 +5,6 @@ from datetime import datetime
 import sqlite3
 import os
 
-from reportlab.pdfgen import canvas
-from docx import Document
-from docx.shared import Pt
-
 VERMELHO = "#C00000"
 VERMELHO_ESCURO = "#8B0000"
 VERMELHO_HOVER = "#A30000"
@@ -124,103 +120,6 @@ def _resumo_quantidade_word(itens):
     return "Quantidade: " + " e ".join(partes)
 
 
-
-
-def _adicionar_paragrafo(doc, texto, negrito=False, tamanho=12):
-    paragrafo = doc.add_paragraph()
-    run = paragrafo.add_run(texto)
-    run.bold = negrito
-    run.font.size = Pt(tamanho)
-    return paragrafo
-
-
-def gerar_proposta_word_liftdesk(caminho_saida, dados):
-    """Gera a proposta em Word do zero, sem depender de template externo."""
-    doc = Document()
-
-    _adicionar_paragrafo(doc, "Proposta Comercial - LiftDesk", negrito=True, tamanho=18)
-    _adicionar_paragrafo(doc, f"Cliente: {dados['cliente']}")
-    _adicionar_paragrafo(doc, f"Telefone: {dados['telefone']}")
-    _adicionar_paragrafo(doc, f"E-mail: {dados['email']}")
-    _adicionar_paragrafo(doc, f"Data/Hora: {dados['data_hora']}")
-    doc.add_paragraph()
-
-    _adicionar_paragrafo(doc, "Itens do orçamento", negrito=True)
-    for item in dados["itens"]:
-        _adicionar_paragrafo(
-            doc,
-            f"- {item['quantidade']}x {item['produto']} | "
-            f"{formatar_moeda(item['preco_unitario'])} cada",
-        )
-    doc.add_paragraph()
-
-    _adicionar_paragrafo(doc, f"Resumo: {_resumo_quantidade_word(dados['itens'])}")
-    _adicionar_paragrafo(doc, f"Condição de pagamento: {dados['parcela']}")
-    _adicionar_paragrafo(doc, f"Valor total: {dados['valor_total_formatado']}")
-    _adicionar_paragrafo(doc, f"Valor da parcela: {dados['valor_parcela_formatado']}")
-
-    doc.save(caminho_saida)
-    return doc
-
-
-def gerar_contrato_word_liftdesk(caminho_saida, placeholders):
-    """Gera o contrato em Word do zero com os dados informados."""
-    doc = Document()
-
-    _adicionar_paragrafo(doc, "Contrato de Venda - LiftDesk", negrito=True, tamanho=18)
-    _adicionar_paragrafo(doc, f"Cliente: {placeholders.get('cliente', '')}")
-    _adicionar_paragrafo(doc, f"Telefone: {placeholders.get('telefone', '')}")
-    _adicionar_paragrafo(doc, f"E-mail: {placeholders.get('email', '')}")
-    doc.add_paragraph()
-
-    for chave, valor in placeholders.items():
-        _adicionar_paragrafo(doc, f"{chave}: {valor}")
-
-    doc.save(caminho_saida)
-
-
-def _limpar_e_escrever(paragrafo, novo_texto):
-    """Limpa o conteúdo de um parágrafo e escreve novo texto."""
-    paragrafo.clear()
-    paragrafo.add_run(novo_texto)
-
-
-def _localizar_paragrafo(doc, texto_procurado):
-    """Localiza o primeiro parágrafo que contém o texto procurado."""
-    for p in doc.paragraphs:
-        if texto_procurado in p.text:
-            return p
-    return None
-
-
-def _remover_paragrafo(paragrafo):
-    """Remove um parágrafo do documento."""
-    if paragrafo is not None:
-        p = paragrafo._element
-        p.getparent().remove(p)
-
-
-def _inserir_paragrafo_apos(paragrafo_ref, novo_texto, copiar_estilo_de=None):
-    """Insere um novo parágrafo após o parágrafo de referência."""
-    if paragrafo_ref is None:
-        return None
-    novo_paragrafo = paragrafo_ref.insert_paragraph_before(novo_texto)
-    if copiar_estilo_de:
-        novo_paragrafo.style = copiar_estilo_de.style
-    return novo_paragrafo
-
-
-def gerar_proposta_word(caminho_saida, dados):
-    """Gera a proposta em Word do zero, sem depender de template externo."""
-    gerar_proposta_word_liftdesk(caminho_saida, dados)
-
-
-
-def gerar_contrato_word(caminho_saida, placeholders):
-    """Gera o contrato em Word do zero com os dados informados."""
-    gerar_contrato_word_liftdesk(caminho_saida, placeholders)
-
-
 def main(page: ft.Page):
     page.title = "LiftDesk — Sistema de Orçamentos"
     page.bgcolor = CINZA_FUNDO
@@ -232,9 +131,6 @@ def main(page: ft.Page):
     page.theme = ft.Theme(font_family=FONTE_BASE)
     page.padding = 0
 
-    # --------------------------------------------------------
-    # BANCO DE DADOS
-    # --------------------------------------------------------
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conexao = sqlite3.connect(DB_PATH)
     cursor = conexao.cursor()
@@ -288,8 +184,6 @@ def main(page: ft.Page):
         """
     )
 
-    # Migração defensiva: se a tabela orcamentos ou produtos já existir
-    # de uma versão anterior (sem essas colunas), adiciona o que falta.
     cursor.execute("PRAGMA table_info(orcamentos)")
     colunas_orcamentos = {linha[1] for linha in cursor.fetchall()}
     if "telefone" not in colunas_orcamentos:
@@ -304,8 +198,6 @@ def main(page: ft.Page):
 
     conexao.commit()
 
-    # Popula a tabela de produtos com os itens originais, apenas
-    # se ainda estiver vazia (primeira execução após a atualização).
     cursor.execute("SELECT COUNT(*) FROM produtos")
     if cursor.fetchone()[0] == 0:
         produtos_iniciais = [
@@ -478,14 +370,7 @@ def main(page: ft.Page):
        # color=TEXTO_PRIMARIO,
        # label_style=ft.TextStyle(color=TEXTO_SECUNDARIO),
        # hint_style=ft.TextStyle(color=TEXTO_SECUNDARIO)
-   # )
-    # --------------------------------------------------------
-    # LINHAS DINÂMICAS DE PRODUTO (lista de itens do orçamento)
-    # ------------------------------------------------------
-    # Cada linha é um dict: {"id": int, "dropdown": Dropdown,
-    # "quantidade_field": TextField, "container": Container}
-    # guardado em itens_produto_linhas, na ordem em que aparecem.
-    # --------------------------------------------------------
+  
     itens_produto_linhas = []
     proximo_id_linha = {"valor": 0}
     itens_produto_coluna = ft.Column(spacing=10)
@@ -764,42 +649,6 @@ def main(page: ft.Page):
         with open(caminho, "w", encoding="utf-8") as arquivo:
             arquivo.write(conteudo)
 
-    def _escrever_pdf(caminho, dados):
-        pdf = canvas.Canvas(caminho)
-        pdf.setTitle("Orçamento LiftDesk")
-        pdf.drawString(100, 800, "LiftDesk")
-        pdf.drawString(100, 780, f"Data: {dados['data_hora']}")
-       # pdf.drawString(100, 760, f"Obra: {dados['obra']}")
-        pdf.drawString(100, 740, f"Cliente: {dados['cliente']}")
-        pdf.drawString(100, 720, f"E-mail: {dados['email']}")
-        pdf.drawString(100, 700, f"Telefone: {dados['telefone']}")
-
-        y = 670
-        pdf.drawString(100, y, "Produtos:")
-        for item in dados["itens"]:
-            y -= 18
-            pdf.drawString(
-                120,
-                y,
-                f"{item['quantidade']}x {item['produto']} — "
-                f"{formatar_moeda(item['preco_unitario'])} cada",
-            )
-
-        y -= 30
-        pdf.drawString(100, y, f"Pagamento: {dados['parcela']}")
-        y -= 20
-        pdf.drawString(100, y, f"Valor Total: {dados['valor_total_formatado']}")
-        y -= 18
-        pdf.drawString(100, y, f"Valor Parcela: {dados['valor_parcela_formatado']}")
-        y -= 60
-        pdf.drawString(100, y, "_________________")
-        y -= 18
-        pdf.drawString(100, y, "Assinatura")
-        pdf.save()
-
-    def _escrever_docx(caminho, dados):
-        gerar_proposta_word(caminho, dados)
-
     async def salvar_orcamento_txt(e):
         dados = calcular()
         if not dados:
@@ -814,42 +663,6 @@ def main(page: ft.Page):
         if not caminho.lower().endswith(".txt"):
             caminho += ".txt"
         _escrever_txt(caminho, dados)
-        mostrar_snack(f"Arquivo salvo em: {caminho}")
-
-    async def salvar_pdf(e):
-        dados = calcular()
-        if not dados:
-            return
-        caminho = await file_picker.save_file(
-            dialog_title="Salvar orçamento em PDF",
-            file_name="orcamento.pdf",
-            allowed_extensions=["pdf"],
-        )
-        if not caminho:
-            return
-        if not caminho.lower().endswith(".pdf"):
-            caminho += ".pdf"
-        _escrever_pdf(caminho, dados)
-        mostrar_snack(f"Arquivo salvo em: {caminho}")
-
-    async def salvar_word(e):
-        dados = calcular()
-        if not dados:
-            return
-        caminho = await file_picker.save_file(
-            dialog_title="Salvar orçamento em Word",
-            file_name="orcamento.docx",
-            allowed_extensions=["docx"],
-        )
-        if not caminho:
-            return
-        if not caminho.lower().endswith(".docx"):
-            caminho += ".docx"
-        try:
-            _escrever_docx(caminho, dados)
-        except (FileNotFoundError, ValueError) as erro:
-            mostrar_snack(str(erro), erro=True)
-            return
         mostrar_snack(f"Arquivo salvo em: {caminho}")
 
     def botao_acao(texto, on_click, principal=False):
@@ -869,14 +682,11 @@ def main(page: ft.Page):
         controls=[
             botao_acao("Calcular Orçamento", calcular, principal=True),
             botao_acao("Salvar TXT", salvar_orcamento_txt),
-            botao_acao("Salvar PDF", salvar_pdf),
-            botao_acao("Salvar Word", salvar_word),
             botao_acao("Histórico", lambda e: asyncio.create_task(page.push_route("/historico"))),
         ],
         wrap=True,
         spacing=10,
     )
-
     botao_add_produto = ft.TextButton(
         content=ft.Row(
             controls=[
@@ -934,10 +744,7 @@ def main(page: ft.Page):
         padding=24,
     )
    
-        
-    # --------------------------------------------------------
-    # VIEW PRINCIPAL — NOVO ORÇAMENTO
-    # --------------------------------------------------------
+    
     def construir_view_orcamento():
         repopular_linhas_produto()
 
@@ -1017,11 +824,9 @@ def main(page: ft.Page):
                                     width=70,
                                     height=70,
                                     alignment=ft.Alignment.CENTER,
-                                    content=ft.Image(
-                                        src="assets/logo.png",
-                                        width=60,
-                                        height=60,
-                                    )
+                                    bgcolor="#8B0000",
+                                    border_radius=999,
+                                    content=ft.Icon(ft.Icons.APARTMENT, color=BRANCO, size=40),
                                 ),
                                 ft.Text(
                                     "LiftDesk",
@@ -1851,7 +1656,7 @@ def main(page: ft.Page):
                 )
             return ""
 
-        async def salvar_contrato_word(e):
+        async def salvar_contrato_resumo(e):
             dados = estado_contrato.get("dados")
             if not dados:
                 dados = atualizar_estado_do_orcamento()
@@ -1864,49 +1669,10 @@ def main(page: ft.Page):
             if not cnpj:
                 mostrar_erro_contrato("Digite o CNPJ/CPF do cliente")
                 return
-            
-            nome_empresa_contratante = (nome_da_empresa_field.value or "").strip()
+
             esconder_erro_contrato()
-
-            placeholders = {
-                "CONTRATANTE_NOME": nome_empresa_contratante or dados.get("cliente", ""),
-                "CONTRATANTE_CNPJ": cnpj,
-                "CONTRATANTE_ENDERECO": endereco_empresa_field.value or "",
-                "CONTRATANTE_REPRESENTANTE": nome_do_representante_field.value or "",
-                "CONTRATANTE_REPRESENTANTE_RG": numero_rg_representante_field.value or "",
-                "CONTRATANTE_REPRESENTANTE_CPF": cpf_representante_field.value or "",
-                "CONTRATANTE_REPRESENTANTE_ENDERECO": endereco_representante_field.value or "",
-                "CONTRATANTE_REPRESENTANTE_NACIONALIDADE": nacionalidade_representante_field.value or "",
-                "CONTRATANTE_REPRESENTANTE_ESTADO_CIVIL": estado_civil_representante_field.value or "",
-                "CONTRATANTE_REPRESENTANTE_REGIME_CASAMENTO": regime_casamento_representante_field.value or "",
-                "VALOR_TOTAL": dados.get("valor_total_formatado", ""),
-                "VALOR_SINAL": dados.get("valor_parcela_formatado", ""),
-                "VALOR_SINAL_EXTENSO": dados.get("valor_parcela_formatado", ""),
-                "VALOR_PARCELA": dados.get("valor_parcela_formatado", ""),
-                "PRAZO_ENTREGA": "90 (noventa) dias",
-                "DATA_ASSINATURA": datetime.now().strftime("%d de %B de %Y"),
-                "REPRESENTANTE_EMAIL": dados.get("email", ""),
-            }
-
-            nome_arquivo = f"contrato_{dados['cliente']}".strip().replace(" ", "_") + ".docx"
-            caminho = await file_picker.save_file(
-                dialog_title="Salvar contrato em Word",
-                file_name=nome_arquivo,
-                allowed_extensions=["docx"],
-            )
-            if not caminho:
-                return
-            if not caminho.lower().endswith(".docx"):
-                caminho += ".docx"
-
-            try:
-                gerar_contrato_word(caminho, placeholders)
-            except Exception as erro:
-                mostrar_erro_contrato(f"Erro ao gerar contrato: {erro}")
-                return
-
             registrar_contrato(dados["id"], dados["cliente"], cnpj)
-            mostrar_snack(f"Contrato salvo em: {caminho}")
+            mostrar_snack("Contrato registrado com sucesso")
 
         card_contrato = ft.Container(
             content=ft.Column(
@@ -1928,8 +1694,8 @@ def main(page: ft.Page):
                     ft.Row(
                         controls=[
                             ft.ElevatedButton(
-                                content="Salvar Contrato em Word",
-                                on_click=salvar_contrato_word,
+                                content="Registrar Contrato",
+                                on_click=salvar_contrato_resumo,
                                 style=ft.ButtonStyle(
                                     bgcolor=VERMELHO,
                                     color=BRANCO,
@@ -1971,7 +1737,7 @@ def main(page: ft.Page):
             controls=[
                 ft.Text("Novo Contrato", size=24, weight=ft.FontWeight.BOLD, color=TEXTO_PRIMARIO),
                 ft.Text(
-                    "Escolha um orçamento salvo para gerar o contrato em Word",
+                    "Escolha um orçamento salvo para registrar o contrato",
                     size=13,
                     color=TEXTO_SECUNDARIO,
                 ),
